@@ -40,20 +40,24 @@ $binding_parameters = New-Object psobject @{
   Name = $name
 };
 
-If ($params.host_header) {
-  $binding_parameters.HostHeader = $params.host_header
+$host_header = Get-Attr $params "host_header"
+If ($host_header) {
+  $binding_parameters.HostHeader = $host_header
 }
 
-If ($params.protocol) {
-  $binding_parameters.Protocol = $params.protocol
+$protocol = Get-Attr $params "protocol"
+If ($protocol) {
+  $binding_parameters.Protocol = $protocol
 }
 
-If ($params.port) {
-  $binding_parameters.Port = $params.port
+$port = Get-Attr $params "port"
+If ($port) {
+  $binding_parameters.Port = $port
 }
 
-If ($params.ip) {
-  $binding_parameters.IPAddress = $params.ip
+$ip = Get-Attr $params "ip"
+If ($ip) {
+  $binding_parameters.IPAddress = $ip
 }
 
 $certificateHash = Get-Attr $params "certificate_hash" $FALSE;
@@ -65,14 +69,20 @@ if ((Get-Module "WebAdministration" -ErrorAction SilentlyContinue) -eq $null){
 }
 
 function Create-Binding-Info {
-  return New-Object psobject @{
-    "bindingInformation" = $args[0].bindingInformation
-    "certificateHash" = $args[0].certificateHash
-    "certificateStoreName" = $args[0].certificateStoreName
-    "isDsMapperEnabled" = $args[0].isDsMapperEnabled
-    "protocol" = $args[0].protocol
-    "sslFlags" = $args[0].sslFlags
+  $binding_info = New-Object psobject @{
+    bindingInformation = $args[0].bindingInformation
+    certificateHash = $args[0].certificateHash
+    certificateStoreName = $args[0].certificateStoreName
+    isDsMapperEnabled = $args[0].isDsMapperEnabled
+    protocol = $args[0].protocol
   }
+  
+  # sslFlags is not available on Windows 2008
+  If (Get-Member -InputObject $args[0] -Name sslFlags) {
+    $binding_info.sslFlags = $args[0].sslFlags
+  }
+  
+  return $binding_info
 }
 
 # Result
@@ -85,14 +95,14 @@ $result = New-Object psobject @{
 };
 
 # Get bindings matching parameters
-$curent_bindings = Get-WebBinding @binding_parameters
-$curent_bindings | Foreach {
+$current_bindings = Get-WebBinding @binding_parameters
+$current_bindings | Foreach {
   $result.matched += Create-Binding-Info $_
 }
 
 try {
   # Add
-  if (-not $curent_bindings -and $state -eq 'present') {
+  if (-not $current_bindings -and $state -eq 'present') {
     New-WebBinding @binding_parameters -Force
 
     # Select certificat
@@ -121,8 +131,8 @@ try {
   }
 
   # Remove
-  if ($curent_bindings -and $state -eq 'absent') {
-    $curent_bindings | foreach {
+  if ($current_bindings -and $state -eq 'absent') {
+    $current_bindings | foreach {
       Remove-WebBinding -InputObject $_
       $result.removed += Create-Binding-Info $_
     }
